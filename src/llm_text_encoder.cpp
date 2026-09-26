@@ -219,6 +219,11 @@ std::expected<std::unique_ptr<llm_text_encoder>, std::string> llm_text_encoder::
 #if defined(KIMODO_HAVE_GGML_VULKAN)
     if (use_vulkan() && ggml_backend_vk_get_device_count()) result->impl_->backend = ggml_backend_vk_init(0);
 #endif
+    // Prefer a registered GPU backend (CUDA) unless KIMODO_BACKEND=cpu. See ggml_weights.cpp.
+    if (!result->impl_->backend)
+        if (const char *b = std::getenv("KIMODO_BACKEND"); !(b && std::string_view(b) == "cpu"))
+            if (ggml_backend_dev_t dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU))
+                result->impl_->backend = ggml_backend_dev_init(dev, nullptr);
     if (!result->impl_->backend) {
         result->impl_->backend = ggml_backend_cpu_init();
         if (!result->impl_->backend) return std::unexpected("cannot initialize text backend");
