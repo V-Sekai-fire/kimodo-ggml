@@ -82,6 +82,14 @@ std::expected<std::unique_ptr<ggml_motion_weights>, std::string> ggml_motion_wei
         if (ggml_backend_vk_get_device_count() > 0) result->backend_ = ggml_backend_vk_init(0);
     }
 #endif
+    // Where Vulkan is absent (WSL), prefer a registered GPU backend (CUDA) unless
+    // KIMODO_BACKEND=cpu forces the CPU fallback.
+    if (!result->backend_) {
+        const char *b = std::getenv("KIMODO_BACKEND");
+        if (!(b && std::string_view(b) == "cpu"))
+            if (ggml_backend_dev_t dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_GPU))
+                result->backend_ = ggml_backend_dev_init(dev, nullptr);
+    }
     if (!result->backend_) {
         result->backend_ = ggml_backend_cpu_init();
         if (!result->backend_) return std::unexpected("GGML CPU backend initialization failed");
