@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstddef>
-#include <expected>
+#include "../include/kimodo/result.hpp"
 #include <span>
 #include <string>
 #include <vector>
@@ -10,7 +10,7 @@ namespace kimodo::detail {
 
 // Exact SMPL-X RP global-root -> local-root conditioning boundary.  Inputs and
 // output are row-major [batch, frames, feature], with feature widths 5 and 4.
-std::expected<std::vector<float>, std::string> global_root_to_local_root(
+kimodo::expected<std::vector<float>, std::string> global_root_to_local_root(
     std::span<const float> normalized_global_root,
     std::span<const float> motion_mask,
     std::size_t batch, std::size_t frames,

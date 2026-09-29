@@ -4,7 +4,7 @@
 
 #include <array>
 #include <cstdint>
-#include <expected>
+#include "result.hpp"
 #include <memory>
 #include <span>
 #include <string>
@@ -29,16 +29,16 @@ struct prompt_segment {
 
 class KIMODO_API model {
 public:
-    static std::expected<std::unique_ptr<model>, std::string> load(
+    static kimodo::expected<std::unique_ptr<model>, std::string> load(
         std::string_view motion_gguf, std::string_view text_bundle = {});
-    std::expected<motion_data, std::string> generate_embedding(
+    kimodo::expected<motion_data, std::string> generate_embedding(
         const std::array<float, embedding_width> &embedding,
         unsigned frames, unsigned steps, std::uint64_t seed,
         float text_cfg, float constraint_cfg) const;
-    std::expected<motion_data, std::string> generate_text(
+    kimodo::expected<motion_data, std::string> generate_text(
         std::string_view utf8_prompt, unsigned frames, unsigned steps, std::uint64_t seed,
         float text_cfg, float constraint_cfg) const;
-    std::expected<motion_data, std::string> generate_text_sequence(
+    kimodo::expected<motion_data, std::string> generate_text_sequence(
         std::span<const prompt_segment> segments, unsigned transition_frames,
         unsigned steps, std::uint64_t seed, float text_cfg, float constraint_cfg) const;
     ~model();
