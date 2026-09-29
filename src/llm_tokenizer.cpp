@@ -2,6 +2,7 @@
 // were independently implemented with llama.cpp src/llama-vocab.cpp at
 // 78ec4c378031811671d1c76a067acbee4f4c56ce as a reference.  No llama.cpp
 // source is copied here.
+#include "../include/kimodo/result.hpp"
 #include "llm_tokenizer.hpp"
 
 #include <gguf.h>
@@ -71,31 +72,31 @@ struct llm_tokenizer::impl {
 
 llm_tokenizer::~llm_tokenizer() = default;
 
-std::expected<std::unique_ptr<llm_tokenizer>, std::string> llm_tokenizer::load(std::string_view path) {
+kimodo::expected<std::unique_ptr<llm_tokenizer>, std::string> llm_tokenizer::load(std::string_view path) {
     gguf_init_params params{false, nullptr};
     gguf_context *file = gguf_init_from_file(std::string(path).c_str(), params);
-    if (!file) return std::unexpected("cannot load tokenizer GGUF");
+    if (!file) return kimodo::unexpected("cannot load tokenizer GGUF");
     const auto release = std::unique_ptr<gguf_context, decltype(&gguf_free)>(file, gguf_free);
     auto key = [&](const char *name) { const auto value = gguf_find_key(file, name); if (value < 0) throw std::runtime_error(std::string("missing tokenizer key: ") + name); return value; };
     try {
         const auto architecture = key("general.architecture");
-        if (std::string_view(gguf_get_val_str(file, architecture)) != "kimodo-llm2vec-tokenizer") return std::unexpected("not a Kimodo LLM2Vec tokenizer GGUF");
+        if (std::string_view(gguf_get_val_str(file, architecture)) != "kimodo-llm2vec-tokenizer") return kimodo::unexpected("not a Kimodo LLM2Vec tokenizer GGUF");
         const auto tokens_key = key("kimodo.tokenizer.tokens"), merges_key = key("kimodo.tokenizer.merges");
-        if (gguf_get_arr_type(file, tokens_key) != GGUF_TYPE_STRING || gguf_get_arr_type(file, merges_key) != GGUF_TYPE_STRING || gguf_get_arr_n(file, tokens_key) != 128000 || gguf_get_arr_n(file, merges_key) != 280147) return std::unexpected("invalid Llama-3 tokenizer GGUF arrays");
+        if (gguf_get_arr_type(file, tokens_key) != GGUF_TYPE_STRING || gguf_get_arr_type(file, merges_key) != GGUF_TYPE_STRING || gguf_get_arr_n(file, tokens_key) != 128000 || gguf_get_arr_n(file, merges_key) != 280147) return kimodo::unexpected("invalid Llama-3 tokenizer GGUF arrays");
         auto result = std::unique_ptr<llm_tokenizer>(new llm_tokenizer);
         result->impl_ = std::make_unique<impl>();
         result->impl_->token_ids.reserve(128000);
         result->impl_->merge_ranks.reserve(280147);
         for (size_t i = 0; i < 128000; ++i) {
             const char *value = gguf_get_arr_str(file, tokens_key, i);
-            if (!value || !result->impl_->token_ids.emplace(value, static_cast<int>(i)).second) return std::unexpected("invalid duplicate tokenizer token");
+            if (!value || !result->impl_->token_ids.emplace(value, static_cast<int>(i)).second) return kimodo::unexpected("invalid duplicate tokenizer token");
         }
         for (size_t i = 0; i < 280147; ++i) {
             std::string merge = gguf_get_arr_str(file, merges_key, i);
             const auto split = merge.find(' ');
-            if (split == std::string::npos || split == 0 || split + 1 == merge.size()) return std::unexpected("invalid BPE merge");
+            if (split == std::string::npos || split == 0 || split + 1 == merge.size()) return kimodo::unexpected("invalid BPE merge");
             merge[split] = separator;
-            if (!result->impl_->merge_ranks.emplace(std::move(merge), static_cast<int>(i)).second) return std::unexpected("duplicate BPE merge");
+            if (!result->impl_->merge_ranks.emplace(std::move(merge), static_cast<int>(i)).second) return kimodo::unexpected("duplicate BPE merge");
         }
         std::array<bool, 256> direct{};
         for (unsigned i = 33; i <= 126; ++i) direct[i] = true;
@@ -104,12 +105,12 @@ std::expected<std::unique_ptr<llm_tokenizer>, std::string> llm_tokenizer::load(s
         std::uint32_t extra = 256;
         for (unsigned i = 0; i < 256; ++i) result->impl_->byte_encode[i] = utf8(direct[i] ? i : extra++);
         return result;
-    } catch (const std::exception &error) { return std::unexpected(error.what()); }
+    } catch (const std::exception &error) { return kimodo::unexpected(error.what()); }
 }
 
-std::expected<std::vector<int>, std::string> llm_tokenizer::encode(std::string_view text) const {
-    if (!impl_) return std::unexpected("invalid tokenizer");
-    if (!valid_utf8(text)) return std::unexpected("prompt is not valid UTF-8");
+kimodo::expected<std::vector<int>, std::string> llm_tokenizer::encode(std::string_view text) const {
+    if (!impl_) return kimodo::unexpected("invalid tokenizer");
+    if (!valid_utf8(text)) return kimodo::unexpected("prompt is not valid UTF-8");
     std::vector<std::string> words;
     for (size_t pos = 0; pos < text.size();) {
         size_t size = 0;
@@ -139,7 +140,7 @@ std::expected<std::vector<int>, std::string> llm_tokenizer::encode(std::string_v
         }
         for (const auto &symbol : symbols) {
             const auto found = impl_->token_ids.find(symbol);
-            if (found == impl_->token_ids.end()) return std::unexpected("BPE symbol is absent from vocabulary");
+            if (found == impl_->token_ids.end()) return kimodo::unexpected("BPE symbol is absent from vocabulary");
             result.push_back(found->second);
         }
     }

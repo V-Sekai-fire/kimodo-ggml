@@ -1,3 +1,4 @@
+#include "../include/kimodo/result.hpp"
 #include "denoiser.hpp"
 #include "ggml_weights.hpp"
 #include "skeleton.hpp"
@@ -34,14 +35,14 @@ float condition_row(const float *raw, const skeleton_spec &s, float *value) {
 }
 }
 
-std::expected<sequence_transition, std::string> prepare_sequence_transition(
+kimodo::expected<sequence_transition, std::string> prepare_sequence_transition(
     const ggml_motion_weights &weights, std::span<const float> previous,
     std::size_t continuation_frames, unsigned transition_frames) {
     const auto *s=find_skeleton(weights.skeleton_key());
-    if(!s)return std::unexpected("unsupported sequence skeleton");
+    if(!s)return kimodo::unexpected("unsupported sequence skeleton");
     const size_t D=s->motion_dim(),J=s->joints(),rotation_begin=5+3*J,rotation_end=rotation_begin+6*J,overlap=transition_frames;
     if(!overlap||overlap>=continuation_frames||previous.size()<=overlap*D||previous.size()%D)
-        return std::unexpected("invalid sequence transition");
+        return kimodo::unexpected("invalid sequence transition");
     sequence_transition result;
     result.observed.resize((continuation_frames+overlap)*D);
     result.observed_mask.resize(result.observed.size());
@@ -54,19 +55,19 @@ std::expected<sequence_transition, std::string> prepare_sequence_transition(
     return result;
 }
 
-std::expected<std::vector<float>, std::string> sample_motion_sequence_from_noise(
+kimodo::expected<std::vector<float>, std::string> sample_motion_sequence_from_noise(
     const ggml_motion_weights &weights, std::span<const sampled_sequence_segment> segments,
     unsigned transition_frames, unsigned steps, float text_weight, float constraint_weight) {
     const size_t D=weights.motion_dim(),body=D-5;
-    if(segments.empty()||!transition_frames||!D)return std::unexpected("sequence requires segments and a transition");
+    if(segments.empty()||!transition_frames||!D)return kimodo::unexpected("sequence requires segments and a transition");
     auto gm=weights.f32_values("stats.global_root.mean"),gs=weights.f32_values("stats.global_root.std");
     auto bm=weights.f32_values("stats.body.mean"),bs=weights.f32_values("stats.body.std");
-    if(!gm||!gs||!bm||!bs||gm->size()!=5||gs->size()!=5||bm->size()!=body||bs->size()!=body)return std::unexpected("motion GGUF lacks compatible motion statistics");
+    if(!gm||!gs||!bm||!bs||gm->size()!=5||gs->size()!=5||bm->size()!=body||bs->size()!=body)return kimodo::unexpected("motion GGUF lacks compatible motion statistics");
     auto scale=[](float stddev){return std::sqrt(stddev*stddev+1.e-5F);};
     auto unnormalize=[&](std::vector<float>&motion){for(size_t row=0;row<motion.size()/D;++row){auto*v=motion.data()+row*D;for(size_t d=0;d<5;++d)v[d]=v[d]*scale((*gs)[d])+(*gm)[d];for(size_t d=0;d<body;++d)v[5+d]=v[5+d]*scale((*bs)[d])+(*bm)[d];}};
     auto normalize=[&](std::vector<float>&motion){for(size_t row=0;row<motion.size()/D;++row){auto*v=motion.data()+row*D;for(size_t d=0;d<5;++d)v[d]=(v[d]-(*gm)[d])/scale((*gs)[d]);for(size_t d=0;d<body;++d)v[5+d]=(v[5+d]-(*bm)[d])/scale((*bs)[d]);}};
     std::vector<float> joined,previous;
-    for(size_t index=0;index<segments.size();++index){const auto&segment=segments[index];const size_t sampled_frames=segment.frames+(index?transition_frames:0);if(segment.frames<2||segment.embedding.size()!=4096||segment.initial_noise.size()!=sampled_frames*D)return std::unexpected("invalid sampled sequence segment");std::vector<float>current;if(!index){auto sampled=sample_motion_from_noise(weights,segment.initial_noise,segment.embedding,sampled_frames,steps,text_weight,constraint_weight);if(!sampled)return std::unexpected(sampled.error());current=std::move(*sampled);unnormalize(current);}else{const size_t overlap=transition_frames;if(overlap>=segment.frames||previous.size()<overlap*D)return std::unexpected("transition must be shorter than every following segment");auto transition=prepare_sequence_transition(weights,previous,segment.frames,transition_frames);if(!transition)return std::unexpected(transition.error());const float origin_x=transition->origin_x,origin_z=transition->origin_z;normalize(transition->observed);auto sampled=sample_motion_from_noise_conditioned(weights,segment.initial_noise,segment.embedding,transition->observed,transition->observed_mask,transition->first_heading,sampled_frames,steps,text_weight,constraint_weight);if(!sampled)return std::unexpected(sampled.error());current=std::move(*sampled);unnormalize(current);for(size_t frame=0;frame<sampled_frames;++frame){auto*row=current.data()+frame*D;row[0]+=origin_x;row[2]+=origin_z;}const size_t start=joined.size()-overlap*D;for(size_t frame=0;frame<overlap;++frame){const float alpha=overlap==1?.5F:1.F-float(frame)/float(overlap-1);for(size_t d=0;d<D;++d)joined[start+frame*D+d]=alpha*joined[start+frame*D+d]+(1.F-alpha)*current[frame*D+d];}joined.insert(joined.end(),current.begin()+static_cast<std::ptrdiff_t>(overlap*D),current.end());}if(!index)joined=current;previous=std::move(current);}
+    for(size_t index=0;index<segments.size();++index){const auto&segment=segments[index];const size_t sampled_frames=segment.frames+(index?transition_frames:0);if(segment.frames<2||segment.embedding.size()!=4096||segment.initial_noise.size()!=sampled_frames*D)return kimodo::unexpected("invalid sampled sequence segment");std::vector<float>current;if(!index){auto sampled=sample_motion_from_noise(weights,segment.initial_noise,segment.embedding,sampled_frames,steps,text_weight,constraint_weight);if(!sampled)return kimodo::unexpected(sampled.error());current=std::move(*sampled);unnormalize(current);}else{const size_t overlap=transition_frames;if(overlap>=segment.frames||previous.size()<overlap*D)return kimodo::unexpected("transition must be shorter than every following segment");auto transition=prepare_sequence_transition(weights,previous,segment.frames,transition_frames);if(!transition)return kimodo::unexpected(transition.error());const float origin_x=transition->origin_x,origin_z=transition->origin_z;normalize(transition->observed);auto sampled=sample_motion_from_noise_conditioned(weights,segment.initial_noise,segment.embedding,transition->observed,transition->observed_mask,transition->first_heading,sampled_frames,steps,text_weight,constraint_weight);if(!sampled)return kimodo::unexpected(sampled.error());current=std::move(*sampled);unnormalize(current);for(size_t frame=0;frame<sampled_frames;++frame){auto*row=current.data()+frame*D;row[0]+=origin_x;row[2]+=origin_z;}const size_t start=joined.size()-overlap*D;for(size_t frame=0;frame<overlap;++frame){const float alpha=overlap==1?.5F:1.F-float(frame)/float(overlap-1);for(size_t d=0;d<D;++d)joined[start+frame*D+d]=alpha*joined[start+frame*D+d]+(1.F-alpha)*current[frame*D+d];}joined.insert(joined.end(),current.begin()+static_cast<std::ptrdiff_t>(overlap*D),current.end());}if(!index)joined=current;previous=std::move(current);}
     return joined;
 }
 } // namespace kimodo::detail

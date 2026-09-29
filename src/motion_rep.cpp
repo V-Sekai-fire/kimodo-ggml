@@ -1,24 +1,25 @@
+#include "../include/kimodo/result.hpp"
 #include "motion_rep.hpp"
 
 #include <cmath>
 
 namespace kimodo::detail {
-std::expected<std::vector<float>, std::string> global_root_to_local_root(
+kimodo::expected<std::vector<float>, std::string> global_root_to_local_root(
     std::span<const float> root, std::span<const float> mask,
     std::size_t batch, std::size_t frames,
     std::span<const float> global_mean, std::span<const float> global_std,
     std::span<const float> local_mean, std::span<const float> local_std, float fps) {
     if (batch == 0 || frames < 2 || root.size() != batch*frames*5 || mask.size() != batch*frames ||
         global_mean.size() != 5 || global_std.size() != 5 || local_mean.size() != 4 || local_std.size() != 4 ||
-        !std::isfinite(fps) || fps <= 0.f) return std::unexpected("invalid global-root conversion input");
-    for (float x : global_std) if (!std::isfinite(x) || x == 0.f) return std::unexpected("invalid global root standard deviation");
-    for (float x : local_std) if (!std::isfinite(x) || x == 0.f) return std::unexpected("invalid local root standard deviation");
+        !std::isfinite(fps) || fps <= 0.f) return kimodo::unexpected("invalid global-root conversion input");
+    for (float x : global_std) if (!std::isfinite(x) || x == 0.f) return kimodo::unexpected("invalid global root standard deviation");
+    for (float x : local_std) if (!std::isfinite(x) || x == 0.f) return kimodo::unexpected("invalid local root standard deviation");
     // Match kimodo.motion_rep.stats.Stats: sqrt(std**2 + eps), eps=1e-5.
     auto scale=[](float stddev) { return std::sqrt(stddev*stddev + 1.e-5f); };
     std::vector<float> result(batch*frames*4);
     for (std::size_t b=0;b<batch;++b) {
         std::size_t length=0; for(std::size_t t=0;t<frames;++t) length += mask[b*frames+t] > .5f;
-        if (length < 2 || length > frames) return std::unexpected("invalid root motion mask length");
+        if (length < 2 || length > frames) return kimodo::unexpected("invalid root motion mask length");
         std::vector<float> angle(frames), x(frames), y(frames), z(frames);
         for (std::size_t t=0;t<frames;++t) {
             const auto p=(b*frames+t)*5;

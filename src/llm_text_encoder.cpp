@@ -1,6 +1,7 @@
 // Attention layout is independently implemented with llama.cpp
 // src/llama-graph.cpp at 78ec4c378031811671d1c76a067acbee4f4c56ce as a
 // reference. No llama.cpp source is copied.
+#include "../include/kimodo/result.hpp"
 #include "llm_text_encoder.hpp"
 #include "llm_tokenizer.hpp"
 
@@ -208,12 +209,12 @@ struct llm_text_encoder::impl {
 
 llm_text_encoder::~llm_text_encoder() = default;
 
-std::expected<std::unique_ptr<llm_text_encoder>, std::string> llm_text_encoder::load(std::string_view directory) try {
+kimodo::expected<std::unique_ptr<llm_text_encoder>, std::string> llm_text_encoder::load(std::string_view directory) try {
     const auto path = std::filesystem::path(directory);
-    if (!std::filesystem::is_directory(path)) return std::unexpected("text model must be a component directory");
+    if (!std::filesystem::is_directory(path)) return kimodo::unexpected("text model must be a component directory");
     for (const auto &name : {"tokenizer.gguf", "embedding.gguf", "final-norm.gguf"})
-        if (!std::filesystem::is_regular_file(path / name)) return std::unexpected("text bundle missing " + std::string(name));
-    for (int i = 0; i < 32; ++i) { char name[32]; std::snprintf(name, sizeof(name), "layer-%02d.gguf", i); if (!std::filesystem::is_regular_file(path / name)) return std::unexpected("text bundle missing " + std::string(name)); }
+        if (!std::filesystem::is_regular_file(path / name)) return kimodo::unexpected("text bundle missing " + std::string(name));
+    for (int i = 0; i < 32; ++i) { char name[32]; std::snprintf(name, sizeof(name), "layer-%02d.gguf", i); if (!std::filesystem::is_regular_file(path / name)) return kimodo::unexpected("text bundle missing " + std::string(name)); }
     auto result = std::unique_ptr<llm_text_encoder>(new llm_text_encoder);
     result->impl_ = std::make_unique<impl>();
 #if defined(KIMODO_HAVE_GGML_VULKAN)
@@ -226,20 +227,20 @@ std::expected<std::unique_ptr<llm_text_encoder>, std::string> llm_text_encoder::
                 result->impl_->backend = ggml_backend_dev_init(dev, nullptr);
     if (!result->impl_->backend) {
         result->impl_->backend = ggml_backend_cpu_init();
-        if (!result->impl_->backend) return std::unexpected("cannot initialize text backend");
+        if (!result->impl_->backend) return kimodo::unexpected("cannot initialize text backend");
         ggml_backend_cpu_set_n_threads(result->impl_->backend, static_cast<int>(std::max(1U, std::thread::hardware_concurrency())));
     }
     auto tokenizer = llm_tokenizer::load((path / "tokenizer.gguf").string());
-    if (!tokenizer) return std::unexpected(tokenizer.error());
+    if (!tokenizer) return kimodo::unexpected(tokenizer.error());
     result->impl_->directory = path;
     result->impl_->tokenizer = std::move(*tokenizer);
     return result;
-} catch (const std::exception &error) { return std::unexpected(error.what()); }
+} catch (const std::exception &error) { return kimodo::unexpected(error.what()); }
 
-std::expected<std::array<float, 4096>, std::string> llm_text_encoder::encode(std::string_view prompt) const try {
+kimodo::expected<std::array<float, 4096>, std::string> llm_text_encoder::encode(std::string_view prompt) const try {
     auto ids = impl_->tokenizer->encode(prompt);
-    if (!ids) return std::unexpected(ids.error());
-    if (ids->size() < 2 || ids->size() > 512) return std::unexpected("prompt token count must be in 1..511 excluding BOS");
+    if (!ids) return kimodo::unexpected(ids.error());
+    if (ids->size() < 2 || ids->size() > 512) return kimodo::unexpected("prompt token count must be in 1..511 excluding BOS");
     std::vector<float> state;
     {
         auto embedding = open_component(impl_->directory / "embedding.gguf", impl_->backend);
@@ -290,5 +291,5 @@ std::expected<std::array<float, 4096>, std::string> llm_text_encoder::encode(std
         for (size_t dim = 0; dim < pooled.size(); ++dim) pooled[dim] += state[token * pooled.size() + dim];
     for (float &value : pooled) value /= float(ids->size() - 1);
     return pooled;
-} catch (const std::exception &error) { return std::unexpected(error.what()); }
+} catch (const std::exception &error) { return kimodo::unexpected(error.what()); }
 } // namespace kimodo::detail

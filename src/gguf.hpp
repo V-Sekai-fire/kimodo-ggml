@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstdint>
-#include <expected>
+#include "../include/kimodo/result.hpp"
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -16,8 +16,8 @@ struct gguf_file {
     std::unordered_set<std::string> tensor_names;
 };
 
-std::expected<gguf_file, std::string> read_gguf_header(std::string_view path);
-std::expected<void, std::string> validate_motion_gguf(const gguf_file &file);
-std::expected<void, std::string> validate_text_gguf(const gguf_file &file);
+kimodo::expected<gguf_file, std::string> read_gguf_header(std::string_view path);
+kimodo::expected<void, std::string> validate_motion_gguf(const gguf_file &file);
+kimodo::expected<void, std::string> validate_text_gguf(const gguf_file &file);
 
 } // namespace kimodo::detail

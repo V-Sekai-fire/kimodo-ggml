@@ -1,7 +1,7 @@
 #pragma once
 
 #include <array>
-#include <expected>
+#include "../include/kimodo/result.hpp"
 #include <memory>
 #include <string>
 #include <string_view>
@@ -13,8 +13,8 @@ public:
     // A text bundle is a directory containing tokenizer.gguf, embedding.gguf,
     // final-norm.gguf, and layer-00.gguf through layer-31.gguf.  Components
     // are loaded serially so only one transformer layer is GPU-resident.
-    static std::expected<std::unique_ptr<llm_text_encoder>, std::string> load(std::string_view bundle_directory);
-    std::expected<std::array<float, 4096>, std::string> encode(std::string_view utf8_prompt) const;
+    static kimodo::expected<std::unique_ptr<llm_text_encoder>, std::string> load(std::string_view bundle_directory);
+    kimodo::expected<std::array<float, 4096>, std::string> encode(std::string_view utf8_prompt) const;
     ~llm_text_encoder();
     llm_text_encoder(const llm_text_encoder &) = delete;
     llm_text_encoder &operator=(const llm_text_encoder &) = delete;

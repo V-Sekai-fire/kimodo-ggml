@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstddef>
-#include <expected>
+#include "../include/kimodo/result.hpp"
 #include <memory>
 #include <string>
 #include <string_view>
@@ -20,13 +20,13 @@ namespace kimodo::detail {
 // the checked parser has accepted their Kimodo metadata and tensor directory.
 class ggml_motion_weights {
 public:
-    static std::expected<std::unique_ptr<ggml_motion_weights>, std::string> load(std::string_view path);
+    static kimodo::expected<std::unique_ptr<ggml_motion_weights>, std::string> load(std::string_view path);
     ~ggml_motion_weights();
     ggml_motion_weights(const ggml_motion_weights &) = delete;
     ggml_motion_weights &operator=(const ggml_motion_weights &) = delete;
 
     ggml_tensor *tensor(std::string_view name) const;
-    std::expected<std::vector<float>, std::string> f32_values(std::string_view name) const;
+    kimodo::expected<std::vector<float>, std::string> f32_values(std::string_view name) const;
     ggml_backend *backend() const noexcept { return backend_; }
     std::string_view skeleton_key() const noexcept { return skeleton_; }
     std::size_t motion_dim() const noexcept { return motion_dim_; }

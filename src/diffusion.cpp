@@ -1,13 +1,14 @@
+#include "../include/kimodo/result.hpp"
 #include "diffusion.hpp"
 
 #include <cmath>
 #include <limits>
 
 namespace kimodo::detail {
-std::expected<diffusion_schedule, std::string> make_cosine_schedule(
+kimodo::expected<diffusion_schedule, std::string> make_cosine_schedule(
     std::uint32_t base_steps, std::uint32_t sample_steps) {
     if (base_steps < 2 || base_steps > 100000 || sample_steps < 1 || sample_steps > base_steps)
-        return std::unexpected("invalid diffusion schedule step count");
+        return kimodo::unexpected("invalid diffusion schedule step count");
     std::vector<float> base_alpha(base_steps);
     auto alpha_bar = [](double t) { return std::pow(std::cos((t + .008) / 1.008 * std::acos(-1.) / 2.), 2.); };
     double cumulative = 1.;
@@ -32,30 +33,30 @@ std::expected<diffusion_schedule, std::string> make_cosine_schedule(
     return result;
 }
 
-std::expected<void, std::string> ddim_step(const diffusion_schedule &s, std::uint32_t index,
+kimodo::expected<void, std::string> ddim_step(const diffusion_schedule &s, std::uint32_t index,
     const float *x_t, const float *pred, float *out, std::size_t values) {
-    if (!x_t || !pred || !out || index >= s.alpha_cumprod.size()) return std::unexpected("invalid DDIM input");
+    if (!x_t || !pred || !out || index >= s.alpha_cumprod.size()) return kimodo::unexpected("invalid DDIM input");
     const float alpha = s.alpha_cumprod[index], previous = s.alpha_cumprod_prev[index];
-    if (!(alpha > 0.f && alpha <= 1.f && previous > 0.f && previous <= 1.f)) return std::unexpected("invalid DDIM alpha");
+    if (!(alpha > 0.f && alpha <= 1.f && previous > 0.f && previous <= 1.f)) return kimodo::unexpected("invalid DDIM alpha");
     const float reciprocal = 1.f / std::sqrt(alpha);
     // PyTorch's sqrt_recipm1_alphas_cumprod is
     // rsqrt(alpha / (1-alpha)) == sqrt((1-alpha) / alpha).
     const float reciprocal_m1 = std::sqrt((1.f - alpha) / alpha);
     for (std::size_t i = 0; i < values; ++i) {
-        if (!std::isfinite(x_t[i]) || !std::isfinite(pred[i])) return std::unexpected("non-finite DDIM input");
+        if (!std::isfinite(x_t[i]) || !std::isfinite(pred[i])) return kimodo::unexpected("non-finite DDIM input");
         const float epsilon = (reciprocal * x_t[i] - pred[i]) / reciprocal_m1;
         out[i] = pred[i] * std::sqrt(previous) + std::sqrt(1.f - previous) * epsilon;
     }
     return {};
 }
 
-std::expected<void, std::string> separated_cfg(const float *text, const float *constraint, const float *uncond,
+kimodo::expected<void, std::string> separated_cfg(const float *text, const float *constraint, const float *uncond,
     float text_weight, float constraint_weight, float *out, std::size_t values) {
     if (!text || !constraint || !uncond || !out || !std::isfinite(text_weight) || !std::isfinite(constraint_weight))
-        return std::unexpected("invalid separated CFG input");
+        return kimodo::unexpected("invalid separated CFG input");
     for (std::size_t i = 0; i < values; ++i) {
         if (!std::isfinite(text[i]) || !std::isfinite(constraint[i]) || !std::isfinite(uncond[i]))
-            return std::unexpected("non-finite separated CFG input");
+            return kimodo::unexpected("non-finite separated CFG input");
         out[i] = uncond[i] + text_weight * (text[i] - uncond[i]) + constraint_weight * (constraint[i] - uncond[i]);
     }
     return {};
